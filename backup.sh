@@ -29,34 +29,33 @@ fi
 
 mysql_connection="-h ${MYSQL_HOST} -u ${MYSQL_USER:-root} -p${MYSQL_PASSWORD}"
 s3_connection="--access_key=${S3_ACCESS_KEY} --secret_key=${S3_SECRET_KEY}"
-if [ -n "${S3_ENDPOINT}"]; then
-  s3_connection="$s3_connection --host=${S3_ENDPOINT} --host-bucket=\"%(bucket)s.${S3_ENDPOINT}\""
+if [ -n "${S3_ENDPOINT}" ]; then
+  s3_connection="$s3_connection --host=${S3_ENDPOINT} --host-bucket=%(bucket)s.${S3_ENDPOINT}"
 fi
 
-# Timestamp (sortable AND readable)
-stamp=`date +"%s - %A %d %B %Y @ %H%M"`
+# Timestamp
+stamp=`date +"%Y%m%d_%H%M"`
 
 # List all the databases
 databases=`mysql $mysql_connection -e "SHOW DATABASES;" | tr -d "| " | grep -v "\(Database\|information_schema\|performance_schema\|mysql\|test\)"`
 
 # Feedback
-echo -e "Dumping to \e[1;32m$bucket/$stamp/\e[00m"
+echo -e "Dumping to \e[1;32ms3://${S3_BUCKET}${S3_BACKUP_PATH:-/}\e[00m"
 
 # Loop the databases
 for db in $databases; do
 
   # Define our filenames
-  filename="$db - $stamp.sql.gz"
+  filename="$db_$stamp.sql.gz"
   object="s3://${S3_BUCKET}${S3_BACKUP_PATH:-/}$db/$filename"
 
   # Feedback
   echo -e "\e[1;34m$db\e[00m"
 
   # Dump and zip
-  echo -e "  creating \e[0;35m$tmpfile\e[00m"
   mysqldump $mysql_connection ${MYSQLDUMP_EXTRA_ARGS} --databases "$db" \
     | gzip -c \
-    | s3cmd put - "$object"
+    | s3cmd -q $s3_connection put - $object
 
 done;
 
